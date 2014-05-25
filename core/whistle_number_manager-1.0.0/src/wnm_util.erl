@@ -205,14 +205,10 @@ correct_depreciated_classifiers([{Classifier, J}|Classifiers], JObj) ->
 -spec classify_number(ne_binary(), wh_proplist()) -> api_binary().
 
 classify_number(Number) ->
-	lager:debug("Try to classify number ~s", [Number]),
     Default = wh_json:from_list(?DEFAULT_CLASSIFIERS),
     Classifiers = whapps_config:get(?WNM_CONFIG_CAT, <<"classifiers">>, Default),
     Num = wnm_util:normalize_number(Number),
-lager:debug("Try to classify number normalized ~s", [Num]),
-    _Result = classify_number(Num, wh_json:to_proplist(Classifiers)),
-lager:debug("Result of try to classify number ~s: ~p", [Num, Classifiers]),
-    _Result.
+    classify_number(Num, wh_json:to_proplist(Classifiers)).
 
 classify_number(Num, []) ->
     lager:debug("unable to classify number ~s", [Num]),
@@ -262,7 +258,7 @@ get_carrier_module(JObj) ->
     case wh_json:get_ne_value(<<"pvt_module_name">>, JObj) of
         'undefined' ->
             lager:debug("carrier module not specified on number document"),
-            <<"wnm_voxbone">>;
+            'undefined';
         Module ->
             Carriers = list_carrier_modules(),
             Carrier = wh_util:try_load_module(Module),

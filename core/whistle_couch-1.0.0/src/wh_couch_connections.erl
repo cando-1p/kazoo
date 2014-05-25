@@ -209,8 +209,6 @@ rm_change_handler(DbName, Pid, DocId) ->
 
 -spec get_node_cookie() -> atom().
 get_node_cookie() ->
-    'my_new_cluster_cookie'.
-bak_get_node_cookie() ->
     Default = gen_server:call(?MODULE, node_cookie),
     try whapps_config:get(?CONFIG_CAT, <<"bigcouch_cookie">>, Default) of
         Cookie -> wh_util:to_atom(Cookie, true)

@@ -70,9 +70,7 @@ get_cnam(JObj) ->
     Number = wh_json:get_value(<<"Caller-ID-Number">>, JObj, <<"0000000000">>),
     Num = wnm_util:normalize_number(Number),
     case wh_cache:fetch_local(?STEPSWITCH_CACHE, cache_key(Num)) of
-        {'ok', CNAM} -> 
-	    lager:debug("cnam lookup for ~p cached: ~p", [Number, CNAM]),
-	    CNAM;
+        {'ok', CNAM} -> CNAM;
         {'error', 'not_found'} ->
             fetch_cnam(Num, wh_json:set_value(<<"phone_number">>, wh_util:uri_encode(Num), JObj))
     end.
@@ -113,10 +111,8 @@ init([]) ->
 handle_call({'render', Props, Template}, _, TemplateName) ->
     {'ok', TemplateName} = erlydtl:compile_template(Template, TemplateName),
     {'ok', Result} = TemplateName:render(Props),
-    lager:debug("cnam lookup render result: ~p", [Result]),
-    {'reply', {'ok', lists:flatten(Result)}, TemplateName};
+    {'reply', {'ok', Result}, TemplateName};
 handle_call(_Request, _From, TemplateName) ->
-    lager:debug("cnam lookup handle unhandled render, req: ~p Template name:", [_Request, TemplateName]),
     {'reply', {'error', 'not_implemented'}, TemplateName}.
 
 %%--------------------------------------------------------------------
@@ -230,7 +226,6 @@ make_request(Number, JObj) ->
     Method = get_http_method(),
     Headers = get_http_headers(),
     HTTPOptions = get_http_options(Url),
-    lager:debug("cnam ready to send request: Url ~p Headers ~p Method ~p Body ~p Options ~p", [Url, Headers, Method, Body, HTTPOptions]),
     case ibrowse:send_req(Url, Headers, Method, Body, HTTPOptions, 1500) of
         {'ok', Status, _, ResponseBody} when size (ResponseBody) > 18 ->
             lager:debug("cnam lookup for ~p returned ~p: ~p", [Number, Status, ResponseBody]),
@@ -246,40 +241,21 @@ make_request(Number, JObj) ->
 -spec get_http_url(wh_json:object()) -> list().
 get_http_url(JObj) ->
     Template = whapps_config:get_binary(?CONFIG_CAT, <<"http_url">>, ?DEFAULT_URL),
-    lager:debug("cnam lookup url template: ~p", [Template]),
-    ProcUrl = 
     case binary:match(Template, <<"opencnam">>) of
         'nomatch' ->
             {'ok', Url} = render(JObj, Template),
             lists:flatten(Url);
         _Else ->
-            case catch render(JObj, Template) of 
-		{'ok', Url} -> 
-		    lager:debug("cnam lookup url render return: ~p", [Url]),
-		    case mochiweb_util:urlsplit(wh_util:to_list(Url)) of
-			{_Scheme, _Host, _Path, "", _Segment} ->
-			    [Url, <<"?ref=2600hz&format=pbx">>];
-			{Scheme, Host, Path, QS, Segment} ->
-			    mochiweb_util:urlunsplit({Scheme, Host, Path
+            {'ok', Url} = render(JObj, Template),
+            case mochiweb_util:urlsplit(wh_util:to_list(Url)) of
+                {_Scheme, _Host, _Path, "", _Segment} ->
+                    lists:flatten([Url, "?ref=2600hz&format=pbx"]);
+                {Scheme, Host, Path, QS, Segment} ->
+                    mochiweb_util:urlunsplit({Scheme, Host, Path
                                               ,[QS, "&ref=2600hz&format=pbx"]
                                               ,Segment
-                                             });
-			_Else -> _Else
-		    end;
-		{'error', _Err} ->
-		    lager:debug("cnam lookup for ~p url render error: ~p", [_Err])
-	    end
-    end,
-    case ProcUrl of
-	[PUrl1|PurlL] when is_binary(PUrl1) orelse is_list(PUrl1) ->
-	    %lager:debug("cnam concatenating binary lists to char list: ~p", [[PUrl1, PurlL]]),
-	    binary_to_list(erlang:iolist_to_binary([PUrl1, PurlL]));
-	PUrl when is_binary(PUrl) ->
-	    %lager:debug("cnam convert binary to char list: ~p", [PUrl]),
-	    binary_to_list(PUrl);
-	Else -> 
-	    %lager:debug("cnam not binary or list of binaries: ~p", [Else]),
-	    Else
+                                             })
+            end
     end.
 
 -spec get_http_body(wh_json:object()) -> list().
@@ -334,12 +310,8 @@ render(JObj, Template) ->
     case catch poolboy:checkout(?STEPSWITCH_CNAM_POOL, 'false', 1000) of
         W when is_pid(W) ->
             Props = json_to_template_props(JObj),
-	    lager:debug("cnam lookup jobj: ~p", [JObj]),
             Reply = gen_server:call(W, {'render', Props, Template}),
             poolboy:checkin(?STEPSWITCH_CNAM_POOL, W),
-	    lager:debug("cnam lookup render reply: ~p", [Reply]),
             Reply;
-        _Else -> 
-	    lager:debug("cnam lookup poolboy error: ~p", [_Else]),
-	    {'error', 'timeout'}
+        _Else -> {'error', 'timeout'}
     end.
