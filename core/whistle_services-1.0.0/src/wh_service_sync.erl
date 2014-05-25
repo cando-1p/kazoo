@@ -182,7 +182,7 @@ bump_modified(JObj) ->
             %% control for x mins.... good luck!
             [RevNum, _] = binary:split(wh_json:get_value(<<"_rev">>, NewJObj), <<"-">>),
             put('callid', <<AccountId/binary, "-", RevNum/binary>>),
-            lager:debug("start synchronization of services with bookkeepers", []),
+            lager:debug("start synchronization of services with bookkeepers for account_id: ~s", [AccountId]),
             maybe_follow_billing_id(AccountId, NewJObj)
     end.
 
@@ -222,33 +222,52 @@ sync_services(AccountId, ServiceJObj, ServiceItems) ->
     try sync_services_bookkeeper(AccountId, ServiceJObj, ServiceItems) of
         'ok' ->
             _ = mark_clean_and_status(<<"good_standing">>, ServiceJObj),
-            lager:debug("synchronization with bookkeeper complete", []),
+            lager:debug("sync with bookkeeper complete for account ~s", [AccountId]),
             maybe_sync_reseller(AccountId, ServiceJObj)
     catch
         'throw':{Reason, _}=_R ->
-            lager:info("bookkeeper error: ~p", [_R]),
+            lager:info("bookkeeper sync error for account ~s, error: ~p", [AccountId, _R]),
             _ = mark_status(wh_util:to_binary(Reason), ServiceJObj),
             maybe_sync_reseller(AccountId, ServiceJObj);
         _E:R ->
             %% TODO: certain errors (such as no CC or expired, ect) should
             %% move the account of good standing...
-            lager:info("unable to sync services(~p): ~p", [_E, R]),
+            lager:info("unable to sync account ~s services(~p): ~p", [AccountId, _E, R]),
+	    ST = erlang:get_stacktrace(),
+	    wh_util:log_stacktrace(ST),
             {'error', R}
     end.
 
 -spec sync_services_bookkeeper(ne_binary(), wh_json:object(), wh_service_items:items()) -> 'ok'.
 sync_services_bookkeeper(AccountId, ServiceJObj, ServiceItems) ->
     Bookkeeper = wh_services:select_bookkeeper(AccountId),
-    Bookkeeper:sync(ServiceItems, AccountId),
+    case catch Bookkeeper:sync(ServiceItems, AccountId) of
+	'ok' ->
+	    lager:warning("Completed services sync for account ~s", [AccountId]),
+	    maybe_charge_transactions(AccountId, ServiceJObj, Bookkeeper);
+	Err ->
+	    lager:error("Error syncing services for account ~s, error info ~p", [AccountId, Err]),
+	    Err
+    end.
+
+-spec maybe_charge_transactions(ne_binary(), wh_json:object(), ne_binary()) -> 'ok'.
+maybe_charge_transactions(AccountId, ServiceJObj, Bookkeeper) ->
     case wh_json:get_value(<<"transactions">>, ServiceJObj, []) of
-        [] -> 'ok';
-        Transactions ->
-            BillingId = wh_json:get_value(<<"billing_id">>, ServiceJObj),
-            Bookkeeper:charge_transaction(BillingId, Transactions),
-            case couch_mgr:save_doc(?WH_SERVICES_DB, wh_json:set_value(<<"transactions">>, [], ServiceJObj)) of
-                {'error', _E} -> lager:warning("failed to clean pending transactions ~p", [_E]);
-                {'ok', _} -> 'ok'
-            end
+	[] -> 'ok';
+	Transactions ->
+	    lager:warning("Processing transactions for account ~s", [AccountId]),
+	    BillingId = wh_json:get_value(<<"billing_id">>, ServiceJObj),
+	    case catch Bookkeeper:charge_transactions(BillingId, Transactions) of
+	        'ok' ->
+		    lager:debug("posted pending transactions", []),
+		    case couch_mgr:save_doc(?WH_SERVICES_DB, wh_json:set_value(<<"transactions">>, [], ServiceJObj)) of
+			{'error', _E} -> lager:warning("failed to clean pending transactions ~p", [_E]);
+			{'ok', _} -> 'ok'
+		    end;
+		Err ->
+		    lager:error("Error syncing services for account ~s, error info ~p", [AccountId, Err]),
+		    Err
+	    end
     end.
 
 -spec maybe_sync_reseller(ne_binary(), wh_json:object()) -> wh_std_return().
@@ -319,7 +338,8 @@ immediate_sync(Account) ->
     case couch_mgr:open_doc(?WH_SERVICES_DB, AccountId) of
         {'error', _}=E -> E;
         {'ok', ServiceJObj} ->
-            immediate_sync(AccountId, ServiceJObj)
+	    maybe_sync_services(AccountId, ServiceJObj)
+            %immediate_sync(AccountId, ServiceJObj)
     end.
 
 immediate_sync(AccountId, ServiceJObj) ->

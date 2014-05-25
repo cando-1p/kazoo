@@ -167,13 +167,14 @@ commit_transactions(BillingId, _Transactions, _Try) ->
 %%--------------------------------------------------------------------
 -spec charge_transactions(ne_binary(), wh_transactions:wh_transactions()) -> 'ok'.
 charge_transactions(BillingId, Transactions) ->
-    Amount = lists:foldl(fun(JObj, Acc) ->
+    Units = lists:foldl(fun(JObj, Acc) ->
                             wh_json:get_value(<<"pvt_amount">>, JObj, 0) + Acc
                          end
                          ,0
                          ,Transactions
                         ),
-     braintree_transaction:quick_sale(BillingId, Amount),
+     lager:debug("Units (USD/10000) to be billed ~p", [Units]),
+     braintree_transaction:quick_sale(BillingId, wht_util:units_to_dollars(Units)),
      'ok'.
 
 %%--------------------------------------------------------------------

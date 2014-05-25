@@ -127,6 +127,7 @@ is_consuming_resource(Props, CallId, Node) ->
 -spec request_channel_authorization(wh_proplist(), ne_binary(), atom()) -> boolean().
 request_channel_authorization(Props, CallId, Node) ->
     lager:debug("channel authorization request started"),
+    
     ReqResp = wh_amqp_worker:call(?ECALLMGR_AMQP_POOL
                                   ,authz_req(Props)
                                   ,fun wapi_authz:publish_authz_req/1
@@ -272,7 +273,7 @@ maybe_update_callee_id(JObj, Acc) ->
 
 -spec authz_req(wh_proplist()) -> wh_proplist().
 authz_req(Props) ->
-    props:filter_undefined(
+    Result = props:filter_undefined(
       [{<<"To">>, ecallmgr_util:get_sip_to(Props)}
        ,{<<"From">>, ecallmgr_util:get_sip_from(Props)}
        ,{<<"Request">>, ecallmgr_util:get_sip_request(Props)}
@@ -281,7 +282,10 @@ authz_req(Props) ->
        ,{<<"Other-Leg-Call-ID">>, props:get_value(<<"Other-Leg-Unique-ID">>, Props)}
        ,{<<"Custom-Channel-Vars">>, wh_json:from_list(ecallmgr_util:custom_channel_vars(Props))}
        | wh_api:default_headers(?APP_NAME, ?APP_VERSION)
-      ]).
+      ]),
+     
+    lager:debug("Call Info: ~p", [Result]),
+    Result.
 
 -spec rating_req(ne_binary(), wh_proplist()) -> wh_proplist().
 rating_req(CallId, Props) ->

@@ -108,8 +108,8 @@ start_link(Args) ->
                                       ,{'consume_options', ?CONSUME_OPTIONS}
                                      ], [Args]).
 
--spec default_timeout() -> 2000.
-default_timeout() -> 2000.
+-spec default_timeout() -> 6000.
+default_timeout() -> 6000.
 
 -spec call(server_ref(), api_terms(), publish_fun(), validate_fun()) ->
                   {'ok', wh_json:object()} |

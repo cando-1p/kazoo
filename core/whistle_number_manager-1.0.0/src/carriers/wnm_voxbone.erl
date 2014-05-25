@@ -1,22 +1,27 @@
 %%%-------------------------------------------------------------------
-%%% @copyright (C) 2011-2014, 2600Hz INC
+%%% @copyright (C) 2014, OnePipe Inc
 %%% @doc
 %%%
 %%% Handle client requests for phone_number documents
 %%%
 %%% @end
 %%% @contributors
-%%%   Karl Anderson
+%%%   David Singer
 %%%-------------------------------------------------------------------
--module(wnm_local).
+-module(wnm_voxbone).
 
--export([find_numbers/3]).
--export([acquire_number/1]).
--export([disconnect_number/1]).
--export([is_number_billable/1]).
--export([should_lookup_cnam/0]).
+-export([find_numbers/3
+         ,acquire_number/1
+         ,disconnect_number/1
+	 ,is_number_billable/1
+         ,should_lookup_cnam/0
+        ]).
 
 -include("../wnm.hrl").
+
+
+-define(DEFAULT_COUNTRY, <<"US">>).
+-define(WNM_OTHER_CONFIG_CAT, <<"number_manager.other">>).
 
 %%--------------------------------------------------------------------
 %% @public
@@ -26,38 +31,32 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec find_numbers(ne_binary(), pos_integer(), wh_proplist()) ->
-                          {'error', 'non_available'}.
-find_numbers(Number, Quanity, Opts) when size(Number) < 5 ->
-    find_numbers(<<"+1", Number/binary>>, Quanity, Opts);
-find_numbers(_Number, _Quanity, _Opts) ->
-    %% TODO: given the requestors account number discovery wnm_local numbers that are
-    %%       available but managed by accendants of the account.
+                          {'ok', wh_json:objects()} |
+                          {'error', _}.
+find_numbers(_Prefix, _Quantity, _Options) ->
     {'error', 'non_available'}.
 
-
--spec is_number_billable(wnm_number()) -> 'false'.
+-spec is_number_billable(wnm_number()) -> 'true'.
 is_number_billable(_Number) -> 'true'.
 
 %%--------------------------------------------------------------------
-%% @private
+%% @public
 %% @doc
 %% Acquire a given number from the carrier
 %% @end
 %%--------------------------------------------------------------------
--spec acquire_number/1 :: (wnm_number()) -> wnm_number().
-acquire_number(#number{dry_run='true'}=Number) -> Number;
-acquire_number(Number) -> Number.
+-spec acquire_number(wnm_number()) -> wnm_number().
+acquire_number(#number{}=Number) ->
+    Number.
 
 %%--------------------------------------------------------------------
-%% @private
+%% @public
 %% @doc
 %% Release a number from the routing table
 %% @end
 %%--------------------------------------------------------------------
-
 -spec disconnect_number(wnm_number()) -> wnm_number().
-disconnect_number(Number) ->
-        Number#number{state = <<"released">>, hard_delete='true'}.
+disconnect_number(#number{}=Number) -> Number.
 
 %%--------------------------------------------------------------------
 %% @private

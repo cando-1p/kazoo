@@ -88,12 +88,13 @@ create_available(#number{number=Number
                         }=N) ->
     Num = wnm_util:normalize_number(Number),
     Updates = [{<<"_id">>, Num}
-               ,{<<"pvt_module_name">>, <<"wnm_local">>}
+               ,{<<"pvt_module_name">>, <<"wnm_voxbone">>}
                ,{<<"pvt_module_data">>, wh_json:new()}
                ,{<<"pvt_number_state">>, ?NUMBER_STATE_AVAILABLE}
                ,{<<"pvt_db_name">>, wnm_util:number_to_db_name(Num)}
                ,{<<"pvt_created">>, wh_util:current_tstamp()}
                ,{<<"pvt_authorizing_account">>, AuthBy}
+	       ,{<<"pvt_features">>, ordsets:from_list([<<"inbound_cnam">>])}
               ],
     JObj = wh_json:set_values(Updates, wh_json:public_fields(Doc)),
     json_to_record(JObj, 'true', N).
@@ -1196,14 +1197,12 @@ activate_phone_number(0, #number{number=Number}=N) ->
     N;
 activate_phone_number(Units, #number{current_balance='undefined', billing_id=Account}=N) ->
     activate_phone_number(Units, N#number{current_balance=wht_util:current_balance(Account)});
-activate_phone_number(Units, #number{current_balance=Balance}=N) when Balance - Units < 0 ->
-    Reason = io_lib:format("not enough credit to activate number for $~p", [wht_util:units_to_dollars(Units)]),
-    lager:debug("~s", [Reason]),
-    error_service_restriction(Reason, N);
-activate_phone_number(Units, #number{current_balance=Balance}=N) ->
-    N#number{activations=append_phone_number_debit(Units, N)
-             ,current_balance=Balance - Units
-            }.
+%activate_phone_number(Units, #number{current_balance=Balance}=N) when Balance - Units < 0 ->
+%    Reason = io_lib:format("not enough credit to activate number for $~p", [wht_util:units_to_dollars(Units)]),
+%    lager:debug("~s", [Reason]),
+%    error_service_restriction(Reason, N);
+activate_phone_number(Units, #number{}=N) ->
+    N#number{activations=append_phone_number_debit(Units, N)}.
 
 %%--------------------------------------------------------------------
 %% @private
