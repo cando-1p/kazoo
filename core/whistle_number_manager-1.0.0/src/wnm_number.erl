@@ -88,7 +88,7 @@ create_available(#number{number=Number
                         }=N) ->
     Num = wnm_util:normalize_number(Number),
     Updates = [{<<"_id">>, Num}
-               ,{<<"pvt_module_name">>, <<"wnm_local">>}
+               ,{<<"pvt_module_name">>, <<"wnm_voxbone">>}
                ,{<<"pvt_module_data">>, wh_json:new()}
                ,{<<"pvt_number_state">>, ?NUMBER_STATE_AVAILABLE}
                ,{<<"pvt_db_name">>, wnm_util:number_to_db_name(Num)}
