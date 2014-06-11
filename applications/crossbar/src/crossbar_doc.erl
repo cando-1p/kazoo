@@ -451,7 +451,7 @@ save_attachment(DocId, AName, Contents, #cb_context{}=Context, Options) ->
 -spec delete(cb_context:context()) -> cb_context:context().
 -spec delete(cb_context:context(), 'permanent') -> cb_context:context().
 
-delete(#cb_context{}=Context) ->
+delete(Context) ->
     JObj0 = cb_context:doc(Context),
     JObj1 = wh_json:set_value(<<"pvt_deleted">>, 'true', update_pvt_parameters(JObj0, Context)),
     case couch_mgr:save_doc(cb_context:account_db(Context), JObj1) of
