@@ -29,6 +29,8 @@
          ,handle_event/2
          ,terminate/2
          ,code_change/3
+	 ,fetch_timeout/0
+	 ,fetch_timeout/1
         ]).
 
 -include("ecallmgr.hrl").
@@ -232,6 +234,15 @@ find_srv(Pid) when is_pid(Pid) -> Pid;
 find_srv(Node) when is_binary(Node) -> find_srv(wh_util:to_atom(Node));
 find_srv(Node) when is_atom(Node) ->
     ecallmgr_fs_node_sup:node_srv(ecallmgr_fs_sup:find_node(Node)).
+
+-define(DEFAULT_FETCH_TIMEOUT, 2600).
+-spec fetch_timeout() -> pos_integer().
+-spec fetch_timeout(fs_node()) -> pos_integer().
+fetch_timeout() ->
+    ecallmgr_config:get(<<"fetch_timeout">>, ?DEFAULT_FETCH_TIMEOUT).
+fetch_timeout(_Node) ->
+    %% TODO: eventually expose this timeout via mod_kazoo and decrement a bit.
+    fetch_timeout().
 
 %%%===================================================================
 %%% gen_server callbacks
