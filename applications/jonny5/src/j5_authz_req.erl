@@ -15,6 +15,7 @@
 handle_req(JObj, _) ->
     'true' = wapi_authz:authz_req_v(JObj),
     wh_util:put_callid(JObj),
+    lager:debug("Begin limits check for ~p ", [JObj]),
     maybe_determine_account_id(j5_request:from_jobj(JObj)).
 
 -spec maybe_determine_account_id(j5_request:request()) -> 'ok'.
