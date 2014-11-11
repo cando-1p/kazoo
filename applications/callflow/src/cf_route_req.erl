@@ -130,7 +130,7 @@ send_route_response(Flow, JObj, Q, Call) ->
     ServerId = wh_json:get_value(<<"Server-ID">>, JObj),
     Publisher = fun(P) -> wapi_route:publish_resp(ServerId, P) end,
     whapps_util:amqp_pool_send(Resp, Publisher),
-    lager:info("callflows knows how to route the call! sent park response").
+    lager:info("callflows knows how to route the call! sent park response to ~p with response: ~p", [ServerId, Resp]).
 
 -spec get_transfer_media(wh_json:object(), wh_json:object()) -> api_binary().
 get_transfer_media(Flow, JObj) ->
