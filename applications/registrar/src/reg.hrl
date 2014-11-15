@@ -8,6 +8,8 @@
 
 -define(CONFIG_CAT, <<"registrar">>).
 
+-define(REG_CACHE, 'registrar_cache').
+
 -record(auth_user, {realm
                     ,username
                     ,password
