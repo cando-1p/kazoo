@@ -435,6 +435,7 @@ process_channel_event(Props) ->
     EventName = get_event_name(Props),
     ApplicationName = get_application_name(Props),
     Masqueraded = is_masquerade(Props),
+    lager:debug("Begin processing channel event ~s for app: ~s with data: ~p", [EventName, ApplicationName, Props]),
     case should_publish(EventName, ApplicationName, Masqueraded) of
         'false' ->
             Action = props:get_value(<<"Action">>, Props),
@@ -571,6 +572,8 @@ specific_call_event_props(<<"CHANNEL_CREATE">>, _, Props) ->
      ,{<<"To-Uri">>, props:get_value(<<"variable_sip_to_uri">>, Props)}
      ,{<<"From">>, ecallmgr_util:get_sip_from(Props)}
      ,{<<"From-Uri">>, props:get_value(<<"variable_sip_from_uri">>, Props)}
+     ,{<<"From-Network-Addr">>, props:get_value(<<"variable_sip_h_X-AUTH-IP">>, Props
+                                                ,props:get_value(<<"variable_sip_received_ip">>, Props))}
     ];
 specific_call_event_props(<<"CHANNEL_ANSWER">>, _, Props) ->
     [{<<"Request">>, ecallmgr_util:get_sip_request(Props)}
