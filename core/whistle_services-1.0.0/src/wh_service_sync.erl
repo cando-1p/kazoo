@@ -340,3 +340,16 @@ immediate_sync(Account) ->
         {'ok', ServiceJObj} ->
 	    bump_modified(ServiceJObj) % Bypasses the check if needs modified but still make sure we have "lock" on syncing this account.
     end.
+
+immediate_sync(AccountId, ServiceJObj) ->
+    case wh_service_plans:create_items(ServiceJObj) of
+        {'error', 'no_plans'}=E -> E;
+        {'ok', ServiceItems} ->
+            %% TODO: support other bookkeepers...
+            try wh_bookkeeper_braintree:sync(ServiceItems, AccountId) of
+                _ -> {'ok', ServiceJObj}
+            catch
+                'throw':{_, R} -> {'error', R};
+                _E:R -> {'error', R}
+            end
+    end.
