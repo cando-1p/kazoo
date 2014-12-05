@@ -36,7 +36,7 @@ find_numbers(_Number, _Quanity, _Opts) ->
 
 
 -spec is_number_billable(wnm_number()) -> 'false'.
-is_number_billable(_Number) -> 'false'.
+is_number_billable(_Number) -> 'true'.
 
 %%--------------------------------------------------------------------
 %% @private
