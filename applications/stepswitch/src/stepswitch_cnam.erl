@@ -54,7 +54,9 @@ start_link(_) ->
 
 lookup(Number) when is_binary(Number) ->
     Num = wnm_util:normalize_number(Number),
-    lookup(wh_json:set_value(<<"phone_number">>, wh_util:uri_encode(Num), wh_json:new()));
+    lookup(wh_json:set_values([{<<"phone_number">>, wh_util:uri_encode(Num)}
+                               ,{<<"Caller-ID-Number">>, Num}
+                              ], wh_json:new()));
 lookup(JObj) ->
     CNAM =
         case get_cnam(JObj) of
@@ -225,7 +227,7 @@ fetch_cnam(Number, JObj) ->
     CNAM.
 
 make_request(Number, JObj) ->
-    Url = get_http_url(JObj),
+    Url = wh_util:to_list(get_http_url(JObj)),
     Body = get_http_body(JObj),
     Method = get_http_method(),
     Headers = get_http_headers(),
@@ -243,7 +245,7 @@ make_request(Number, JObj) ->
             <<>>
     end.
 
--spec get_http_url(wh_json:object()) -> list().
+-spec get_http_url(wh_json:object()) -> ne_binary().
 get_http_url(JObj) ->
     Template = whapps_config:get_binary(?CONFIG_CAT, <<"http_url">>, ?DEFAULT_URL),
     lager:debug("cnam lookup url template: ~p", [Template]),
@@ -257,10 +259,10 @@ get_http_url(JObj) ->
 		{'ok', Url} -> 
 		    lager:debug("cnam lookup url render return: ~p", [Url]),
 		    case mochiweb_util:urlsplit(wh_util:to_list(Url)) of
-			{_Scheme, _Host, _Path, "", _Segment} ->
-			    [Url, <<"?ref=2600hz&format=pbx">>];
-			{Scheme, Host, Path, QS, Segment} ->
-			    mochiweb_util:urlunsplit({Scheme, Host, Path
+                {_Scheme, _Host, _Path, "", _Segment} ->
+                    [Url, <<"?ref=2600hz&format=pbx">>];
+                {Scheme, Host, Path, QS, Segment} ->
+                    mochiweb_util:urlunsplit({Scheme, Host, Path
                                               ,[QS, "&ref=2600hz&format=pbx"]
                                               ,Segment
                                              });
@@ -277,9 +279,9 @@ get_http_url(JObj) ->
 	PUrl when is_binary(PUrl) ->
 	    %lager:debug("cnam convert binary to char list: ~p", [PUrl]),
 	    binary_to_list(PUrl);
-	Else -> 
-	    %lager:debug("cnam not binary or list of binaries: ~p", [Else]),
-	    Else
+	_Else -> 
+	    %lager:debug("cnam not binary or list of binaries: ~p", [_Else]),
+        _Else
     end.
 
 -spec get_http_body(wh_json:object()) -> list().
