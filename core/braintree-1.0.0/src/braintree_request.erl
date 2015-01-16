@@ -80,8 +80,9 @@ do_request(Method, Path, Body) ->
                    ,{basic_auth, {whapps_config:get_string(<<"braintree">>, <<"default_public_key">>, <<>>)
                                   ,whapps_config:get_string(<<"braintree">>, <<"default_private_key">>, <<>>)}}
                   ],
+    ReqResp = ibrowse:send_req(Url, Headers, Method, Body, HTTPOptions)
     verbose_debug("Request:~n~s ~s~n~s~n", [Method, Url, Body]),
-    case ibrowse:send_req(Url, Headers, Method, Body, HTTPOptions) of
+    case ReqResp of
         {ok, "401", _, _Response} ->
             verbose_debug("Response:~n401~n~s~n", [_Response]),
             lager:debug("braintree error response(~pms): 401 Unauthenticated", [timer:now_diff(erlang:now(), StartTime) div 1000]),
