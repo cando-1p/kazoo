@@ -56,7 +56,78 @@ delete(#number{features=Features
                           ,number_doc=wh_json:delete_key(<<"dash_e911">>, Doc)
                          }
     end.
-
+% abstract for all features
+maybe_update_feature(#number{current_number_doc=CurrentJObj
+                          ,features=Features
+                          ,number_doc=JObj
+                          ,dry_run=DryRun
+                         }=N
+                        , FeatureKey
+        ) ->
+    CurrentFeatureCfg = wh_json:get_ne_value(FeatureKey, CurrentJObj),
+    PreviousFeatureCfg = wh_json:get_ne_value(FeatureKey, JObj),
+    NotChanged = wnm_util:are_jobjs_identical(CurrentE911, E911),
+    case {PreviousFeatureCfg, CurrentFeatureCfg} of
+        {'undefined', 'undefined'} ->
+            'disabled';
+        {'undefined', _} ->
+            'add';
+        {_, 'undefined'} ->
+            'remove';
+        {_, _} ->
+            case wnm_util:are_jobjs_identical(CurrentFeatureCfg, PreviousFeatureCfg) of
+                'true' ->
+                    'enabled';
+                _ ->
+                    'update'
+            end
+    end,
+    case wh_util:is_empty(CurrentFeatureCfg) of
+        'disabled' ->
+            N#number{features=sets:del_element(FeatureKey, Features)};
+        'remove' when DryRun =:= 'true' ->
+            lager:debug("dry run: remove vitelity e911 information"),
+            N#number{features=sets:del_element(FeatureKey, Features)};
+        'remove' ->
+            lager:debug("remove vitelity e911 information"),
+            _ = remove_number(Number),
+            N#number{features=sets:del_element(FeatureKey, Features)};
+        'enabled' ->
+            N#number{features=sets:add_element(FeatureKey, Features)};
+        'update' when DryRun =:= 'true' ->
+            lager:debug("dry run: change vitelity e911 information: ~s", [wh_json:encode(E911)]),
+            N#number{features=sets:add_element(FeatureKey, Features)};
+        'update' ->
+            lager:debug("change vitelity e911 information: ~s", [wh_json:encode(E911)]),
+            N1#number{number_doc=wh_json:set_value(<<"dash_e911">>, update_e911(N1, E911), JObj)}
+        'add' when DryRun =:= 'true' ->
+            lager:debug("dry run: enable vitelity e911 information: ~s", [wh_json:encode(E911)]),
+            N#number{features=sets:add_element(FeatureKey, Features)};
+        'add' ->
+            lager:debug("enable vitelity e911 information: ~s", [wh_json:encode(E911)]),
+            wnm_number:activate_feature(FeatureKey, N),
+            N1#number{number_doc=wh_json:set_value(<<"dash_e911">>, update_e911(N1, E911), JObj)}
+    end;
+    case wh_util:is_empty(CurrentFeatureCfg) of
+        'true' when NotChanged ->
+            N#number{features=sets:del_element(FeatureKey, Features)};
+        'true' when DryRun =:= 'true' ->
+            lager:debug("dry run: remove vitelity e911 information"),
+            N#number{features=sets:del_element(FeatureKey, Features)};
+        'true' ->
+            lager:debug("remove vitelity e911 information"),
+            _ = remove_number(Number),
+            N#number{features=sets:del_element(FeatureKey, Features)};
+        'false' when NotChanged ->
+            N#number{features=sets:add_element(FeatureKey, Features)};
+        'false' when DryRun =:= 'true' ->
+            lager:debug("dry run: change vitelity e911 information: ~s", [wh_json:encode(E911)]),
+            N#number{features=sets:add_element(FeatureKey, Features)};
+        'false' ->
+            lager:debug("change vitelity e911 information: ~s", [wh_json:encode(E911)]),
+            wnm_number:activate_feature(FeatureKey, N),
+            N1#number{number_doc=wh_json:set_value(<<"dash_e911">>, update_e911(N1, E911), JObj)}
+    end;
 -spec maybe_update_e911(wnm_number()) -> wnm_number().
 maybe_update_e911(#number{current_number_doc=CurrentJObj
                           ,features=Features
