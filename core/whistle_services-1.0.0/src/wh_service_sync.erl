@@ -200,7 +200,7 @@ bump_modified(JObj) ->
             %% control for x mins.... good luck!
             [RevNum, _] = binary:split(wh_json:get_value(<<"_rev">>, NewJObj), <<"-">>),
             put('callid', <<AccountId/binary, "-", RevNum/binary>>),
-            lager:debug("start synchronization of services with bookkeepers"),
+            lager:debug("start synchronization of services with bookkeepers for account_id: ~s", [AccountId]),
             maybe_follow_billing_id(AccountId, NewJObj)
     end.
 
@@ -242,18 +242,20 @@ sync_services(AccountId, ServiceJObj, ServiceItems) ->
     try sync_services_bookkeeper(AccountId, ServiceJObj, ServiceItems) of
         'ok' ->
             _ = mark_clean_and_status(<<"good_standing">>, ServiceJObj),
-            io:format("synchronization with bookkeeper complete~n", []),
-            lager:debug("synchronization with bookkeeper complete"),
+            io:format("synchronization with bookkeeper complete for account ~s~n", [AccountId]),
+            lager:debug("synchronization with bookkeeper complete for account ~s", [AccountId]),
             maybe_sync_reseller(AccountId, ServiceJObj)
     catch
         'throw':{Reason, _}=_R ->
-            lager:info("bookkeeper error: ~p", [_R]),
+            lager:info("bookkeeper sync error for account ~s, error: ~p", [AccountId, _R]),
             _ = mark_clean_and_status(wh_util:to_binary(Reason), ServiceJObj),
             maybe_sync_reseller(AccountId, ServiceJObj);
         _E:R ->
             %% TODO: certain errors (such as no CC or expired, ect) should
             %%    move the account of good standing...
-            lager:info("unable to sync services(~p): ~p", [_E, R]),
+            lager:info("unable to sync account ~s services(~p): ~p", [AccountId, _E, R]),
+            ST = erlang:get_stacktrace(),
+            wh_util:log_stacktrace(ST),
             {'error', R}
     end.
 
