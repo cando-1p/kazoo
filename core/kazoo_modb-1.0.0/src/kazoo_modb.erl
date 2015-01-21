@@ -18,6 +18,7 @@
 -export([refresh_views/1]).
 -export([create/1]).
 
+-define(OLD_VIEW_MAP, [{<<"transactions/sum_by_reason">>,<<"transactions/credit_remaining">>}]).
 %%--------------------------------------------------------------------
 %% @public
 %% @doc
@@ -41,6 +42,7 @@ get_results(Account, View, ViewOptions, Retry) ->
     EncodedMODb = wh_util:format_account_id(AccountMODb, 'encoded'),
     case couch_mgr:get_results(EncodedMODb, View, ViewOptions) of
         {'error', 'not_found'} ->
+            lager:warning("failed to pull modb ~s view ~p", [AccountMODb, View]),
             get_results_not_found(Account, View, ViewOptions, Retry);
         Results -> Results
     end.
@@ -52,10 +54,22 @@ get_results_not_found(Account, View, ViewOptions, Retry) ->
     EncodedMODb = wh_util:format_account_id(AccountMODb, 'encoded'),
     case couch_mgr:db_exists(EncodedMODb) of
         'true' ->
-            refresh_views(AccountMODb),
-            get_results(Account, View, ViewOptions, Retry-1);
+            maybe_try_old_view(Account, View, ViewOptions, Retry, EncodedMODb);
         'false' ->
             get_results_missing_db(Account, View, ViewOptions, Retry)
+    end.
+-spec maybe_try_old_view(ne_binary(), ne_binary(), wh_proplist(), integer(), ne_binary()) ->
+                                   {'ok', wh_json:objects()}.
+maybe_try_old_view(Account, View, ViewOptions, Retry, EncodedMODb) ->
+    case props:get_value(View, ?OLD_VIEW_MAP) of
+        'undefined' ->
+            refresh_views(EncodedMODb),
+            case props:get_value('original_view', ViewOptions) of
+                'undefined' ->  get_results(Account, View, ViewOptions, Retry-1);
+                OriginalView -> get_results(Account, OriginalView, props:delete('original_view', ViewOptions), Retry-1)
+            end;
+        OldView ->
+            get_results(Account, OldView, [{'original_view', View}|ViewOptions], Retry)
     end.
 
 -spec get_results_missing_db(ne_binary(), ne_binary(), wh_proplist(), integer()) ->
@@ -182,8 +196,10 @@ get_modb(Account, Props) when is_list(Props) ->
 get_modb(Account, Timestamp) ->
     wh_util:format_account_mod_id(Account, Timestamp).
 
+get_modb(Account, Year, Month) when is_integer(Year), is_integer(Month) ->
+    wh_util:format_account_mod_id(Account, Year, Month);
 get_modb(Account, Year, Month) ->
-    wh_util:format_account_mod_id(Account, Year, Month).
+    wh_util:format_account_mod_id(Account, wh_util:to_integer(Year), wh_util:to_integer(Month)).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -221,7 +237,7 @@ do_create(AccountMODb, 'false') ->
 
 -spec refresh_views(ne_binary()) -> 'ok'.
 refresh_views(AccountMODb) ->
-    lager:debug("init modb ~p", [AccountMODb]),
+    lager:debug("init/update views for modb ~p", [AccountMODb]),
     EncodedMODb = wh_util:format_account_id(AccountMODb, 'encoded'),
     Views = get_modb_views(),
     _ = whapps_util:update_views(EncodedMODb, Views, 'true'),
@@ -250,6 +266,7 @@ fetch_modb_views() ->
 -spec create_routines(ne_binary()) -> 'ok'.
 create_routines(AccountMODb) ->
     Routines = whapps_config:get(?CONFIG_CAT, <<"routines">>, []),
+    lager:debug("run modb on ~s in modules ~p", [AccountMODb, Routines]),
     lists:foldl(
         fun(Mod, _) ->
             Module = wh_util:to_atom(Mod),
